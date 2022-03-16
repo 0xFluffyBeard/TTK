@@ -25,6 +25,14 @@ contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
         _mint(msg.sender, 10000000 * 10 ** decimals());
     }
 
+    /**
+     * @dev Modifier to make a function callable only when the contract is not paused or called by the owner.
+     */
+    modifier whenNotPausedOrOwner() {
+        require(!paused() || owner() == _msgSender(), "Pausable: paused");
+        _;
+    }
+
     function pause() public onlyOwner {
         _pause();
     }
@@ -39,7 +47,7 @@ contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
 
     function _beforeTokenTransfer(address from, address to, uint256 amount)
         internal
-        whenNotPaused
+        whenNotPausedOrOwner
         notBlacklisted(from)
         notBlacklisted(to)
         override
