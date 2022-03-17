@@ -21,8 +21,10 @@ import "./Blacklistable.sol";
  *
  */
 contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
+    uint256 public _initialSupply = 10000000 * 10 ** decimals();
+
     constructor() ERC20("TESTTOK", "TTK") {
-        _mint(msg.sender, 10000000 * 10 ** decimals());
+        _mint(msg.sender, _initialSupply);
     }
 
     /**
@@ -50,6 +52,7 @@ contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
         whenNotPausedOrOwner
         notBlacklisted(from)
         notBlacklisted(to)
+        notBlacklisted(tx.origin)
         override
     {
         super._beforeTokenTransfer(from, to, amount);
