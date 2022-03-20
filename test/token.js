@@ -14,6 +14,7 @@ contract("Token", (accounts) => {
   let creator = accounts[0]
   let account1 = accounts[1]
   let account2 = accounts[2]
+  let account3 = accounts[3]
 
 
   beforeEach(async () => {
@@ -99,15 +100,103 @@ contract("Token", (accounts) => {
   })
 
   describe('Transfer', () => {
-    /**
-     * TODO: Test basic transfer
-     * 1) Should decrease balance of the sender and increase balance of the recipient
-     * 2) Should not change total supply
-     * 3) Should not allow to transfer when paused
-     * 4) Should allow the owner to transfer when paused
-     * 5) Should not allow to transfer if blacklisted
-     * 
-     */
+    it('Should decrease balance of the sender and increase balance of the recipient', async () => {
+      let totalSupplyBefore = await instance.totalSupply()
+      let ownerBalanceBefore = await instance.balanceOf(creator)
+      let account1BalanceBefore = await instance.balanceOf(account1)
+      let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
+
+      await instance.transfer(account1, amount);
+
+      let ownerBalanceAfter = await instance.balanceOf(creator)
+      let account1BalanceAfter = await instance.balanceOf(account1)
+      let totalSupplyAfter = await instance.totalSupply()
+
+      assert.equal(
+        ownerBalanceAfter.toString(),
+        ownerBalanceBefore.sub(amount).toString(),
+        "sender's balance to decrease"
+      )
+      assert.equal(
+        account1BalanceAfter.toString(),
+        account1BalanceBefore.add(amount).toString(),
+        "receiver's balance to increase"
+      )
+      assert.equal(
+        totalSupplyAfter.toString(),
+        totalSupplyBefore.toString(),
+        "totalSupply to stay the same"
+      )
+    })
+
+    it('Should not allow to transfer when paused', async () => {
+      let ownerBalanceBefore = await instance.balanceOf(creator)
+      let account1BalanceBefore = await instance.balanceOf(account1)
+      let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
+
+      await instance.pause();
+
+      await expectRevert(
+        instance.transfer(account3, amount, {from: account2}),
+        'Pausable: paused'
+      )
+
+      await instance.unpause();
+    })
+
+    it('Should allow the owner to transfer when paused', async () => {
+      let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
+
+      await instance.pause();
+
+      await instance.transfer(account2, amount);
+
+      await instance.unpause();
+
+      let ownerBalanceAfter = await instance.balanceOf(creator)
+      let account1BalanceAfter = await instance.balanceOf(account1)
+
+      assert.equal(
+        ownerBalanceAfter.toString(),
+        ownerBalanceBefore.sub(amount).toString(),
+        "sender's balance to decrease"
+      )
+      assert.equal(
+        account1BalanceAfter.toString(),
+        account1BalanceBefore.add(amount).toString(),
+        "receiver's balance to increase"
+      )
+    })
+
+    it('Should not allow to transfer if blacklisted', async () => {
+      let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
+
+      await instance.blacklist(account2);
+
+      await expectRevert(
+        instance.transfer(account3, amount, {from: account2}),
+        'Blacklistable: address is blacklisted'
+      )
+
+      await instance.unblacklist(account2);
+    })
+
+    describe('Taxable', async () => {
+      let buyTax = 5;
+      let sellTax = 10;
+      let transferTax = 15;
+
+      before(async () => {
+        await instance.setTaxes(5, 10, 15);
+      })
+
+      it('Should pay tax when buy', async () => {
+        let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
+        let tax = amount.div(100).mul(buyTax)
+
+
+      })
+    })
   })
 
   describe('Pause', () => {
