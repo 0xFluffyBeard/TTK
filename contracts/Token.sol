@@ -56,7 +56,24 @@ contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable, Taxabl
         notBlacklisted(tx.origin)
         override
     {
-        super._beforeTokenTransfer(from, to, _payTax(from, to, amount));
+        super._beforeTokenTransfer(from, to, amount);
+    }
+
+    function _transfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override {
+        uint256 _tax = _calculateTax(from, to);
+
+        if (_tax > 0) {
+            uint256 _taxAmount = amount / 100 * _tax;
+
+            super._transfer(from, taxWallet, _taxAmount);
+            amount -= _taxAmount;
+        }
+
+        super._transfer(from, to, amount);
     }
 
     /**

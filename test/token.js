@@ -1,5 +1,4 @@
 const { expectRevert } = require('@openzeppelin/test-helpers')
-const { describe } = require('yargs')
 
 const Token = artifacts.require("Token")
 
@@ -11,14 +10,19 @@ const Token = artifacts.require("Token")
 contract("Token", (accounts) => {
 
   let instance
+  let decimals
+  let zeroes
   let creator = accounts[0]
   let account1 = accounts[1]
   let account2 = accounts[2]
   let account3 = accounts[3]
+  let accountLP = accounts[4]
 
 
-  beforeEach(async () => {
+  before(async () => {
     instance =  await Token.deployed()
+    decimals = await instance.decimals()
+    zeroes = Math.pow(10, decimals)
   })
 
   describe('Creation', () => {
@@ -145,11 +149,14 @@ contract("Token", (accounts) => {
     })
 
     it('Should allow the owner to transfer when paused', async () => {
+      let ownerBalanceBefore = await instance.balanceOf(creator)
+      let account1BalanceBefore = await instance.balanceOf(account1)
+
       let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
 
       await instance.pause();
 
-      await instance.transfer(account2, amount);
+      await instance.transfer(account1, amount);
 
       await instance.unpause();
 
@@ -185,16 +192,64 @@ contract("Token", (accounts) => {
       let buyTax = 5;
       let sellTax = 10;
       let transferTax = 15;
+      let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
 
       before(async () => {
-        await instance.setTaxes(5, 10, 15);
+        await instance.setTaxes(buyTax, sellTax, transferTax);
+        await instance.addTaxedLpPair(accountLP);
+        await instance.addExcemptFromTaxes(account3);
+        await instance.transfer(account1, amount.muln(5));
+        await instance.transfer(account3, amount.muln(5));
+        await instance.transfer(accountLP, amount.muln(5));
       })
 
-      it('Should pay tax when buy', async () => {
-        let amount = web3.utils.toBN(web3.utils.toWei('1000', 'ether'))
-        let tax = amount.div(100).mul(buyTax)
+      let taxVariantData = [
+        ['Should pay tax on buy', buyTax, accountLP, account1],
+        ['Should pay tax on sell', sellTax, account1, accountLP],
+        ['Should pay tax on transfer', transferTax, account1, account2],
+        ['Should pay NO tax if in exemptFromTaxes', 0, account3, account2]
+      ]
 
+      taxVariantData.forEach((testData) => {
+        let accountFrom = testData[2];
+        let accountTo = testData[3];
 
+        it('Should pay tax on ' + testData[0], async () => {
+          let tax = amount.divn(100).muln(testData[1])
+
+          let totalSupplyBefore = await instance.totalSupply()
+          let ownerBalanceBefore = await instance.balanceOf(creator)
+          let accountFromBalanceBefore = await instance.balanceOf(accountFrom)
+          let accountToBalanceBefore = await instance.balanceOf(testData[3])
+
+          await instance.transfer(accountTo, amount, {from: accountFrom});
+
+          let totalSupplyAfter = await instance.totalSupply()
+          let ownerBalanceAfter = await instance.balanceOf(creator)
+          let accountFromBalanceAfter = await instance.balanceOf(accountFrom)
+          let accountToBalanceAfter = await instance.balanceOf(accountTo)
+
+          assert.equal(
+            accountFromBalanceAfter.toString(),
+            accountFromBalanceBefore.sub(amount).toString(),
+            "sender's balance to decrease by the amount"
+          )
+          assert.equal(
+            accountToBalanceAfter.toString(),
+            accountToBalanceBefore.add(amount).sub(tax).toString(),
+            "receiver's balance to increase by the amount-tax"
+          )
+          assert.equal(
+            totalSupplyAfter.toString(),
+            totalSupplyBefore.toString(),
+            "totalSupply to stay the same"
+          )
+          assert.equal(
+            ownerBalanceAfter.toString(),
+            ownerBalanceBefore.add(tax).toString(),
+            "owner's (tax wallet) balance to increase by the tax"
+          )
+        })
       })
     })
   })
@@ -216,6 +271,7 @@ contract("Token", (accounts) => {
      * 2) Should not allow non owner to blacklist accounts
      * 3) Should allow the owner to unblacklist accounts
      * 4) Should not allow non owner to unblacklist accounts
+     * 5) Should allow the owner to burn blacklisted funds without an allowance
      */
   })
 })

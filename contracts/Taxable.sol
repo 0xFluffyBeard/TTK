@@ -12,7 +12,7 @@ abstract contract Taxable is ERC20, Ownable {
   mapping (address => bool) private taxedLpPairs;
   mapping (address => bool) private exemptFromTaxes;
 
-  address private taxWallet;
+  address internal taxWallet;
 
   event TaxedLpPairAdded(address indexed _address);
   event TaxedLpPairRemoved(address indexed _address);
@@ -67,37 +67,13 @@ abstract contract Taxable is ERC20, Ownable {
   }
 
   /**
-   * @dev initiates a transfer of the tax amount to the taxWallet, if needed.
-   */
-  function _payTax(address from, address to, uint256 amount) internal returns (uint256) {
-    if (exemptFromTaxes[from] || exemptFromTaxes[to] || to == taxWallet) {
-      return amount;
-    }
-
-    uint256 _tax = _calculateTax(from, to);
-
-    if (_tax == 0) {
-      return amount;
-    }
-
-    uint256 _taxAmount = amount / 100 * _tax;
-
-    /**
-     * I don't realy like to do it this way, but that's a limitation of the OZ ERC20 contract (_balances is ).
-     * What I don't like: _transfer() will trigger the full cycle with _beforeTokenTransfer().
-     * And it will reenter this same function.
-     * Even if it will exit in the first "if", that's still useless waste of GAS.
-     * I would try to optimize that in production.
-     */
-    _transfer(from, taxWallet, _taxAmount);
-
-    return amount - _taxAmount;
-  }
-
-  /**
    * @dev Calculates which tax needs to be paid
    */
   function _calculateTax(address from, address to) internal view returns (uint256) {
+    if (exemptFromTaxes[from] || exemptFromTaxes[to] || to == taxWallet) {
+      return 0;
+    }
+
     if (taxedLpPairs[from]) {
       return buyTax;
     }
