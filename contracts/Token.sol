@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Blacklistable.sol";
+import "./Taxable.sol";
 
 /**
  *
@@ -16,14 +17,14 @@ import "./Blacklistable.sol";
  * [X] 3) Calling it TESTTOK, $TTK
  * [X] 4) having a blacklist, and a way to blacklist/unblacklist addressess
  * [X] 5) Burning tokens
- * [ ] 6) Tax. If a person is buying, tax them 10%. If they are selling, tax them 20%.
- * [ ] 7) Tests
+ * [X] 6) Tax. If a person is buying, tax them 10%. If they are selling, tax them 20%.
+ * [X] 7) Tests
  *
  */
-contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
+contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable, Taxable {
     uint256 public _initialSupply = 10000000 * 10 ** decimals();
 
-    constructor() ERC20("TESTTOK", "TTK") {
+    constructor() ERC20("TESTTOK", "TTK") Taxable(10, 20, 0, _msgSender()) {
         _mint(msg.sender, _initialSupply);
     }
 
@@ -56,6 +57,23 @@ contract Token is ERC20, ERC20Burnable, Pausable, Ownable, Blacklistable {
         override
     {
         super._beforeTokenTransfer(from, to, amount);
+    }
+
+    function _transfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override {
+        uint256 _tax = _calculateTax(from, to);
+
+        if (_tax > 0) {
+            uint256 _taxAmount = amount / 100 * _tax;
+
+            super._transfer(from, taxWallet, _taxAmount);
+            amount -= _taxAmount;
+        }
+
+        super._transfer(from, to, amount);
     }
 
     /**
